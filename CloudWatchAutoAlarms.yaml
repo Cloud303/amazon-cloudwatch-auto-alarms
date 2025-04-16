@@ -1,4 +1,4 @@
-AWSTemplateFormatVersion: '2010-09-09'
+AWSTemplateFormatVersion: "2010-09-09"
 Description: Automatically Create Alarms for EC2, RDS, and AWS Lambda
 Parameters:
   Memory:
@@ -124,8 +124,7 @@ Conditions:
     Fn::Equals:
       - !Ref EnableNotifications
       - "true"
-  TargetRegionsSpecified:
-    !Not
+  TargetRegionsSpecified: !Not
     - !Equals
       - !Ref TargetRegions
       - ""
@@ -136,7 +135,7 @@ Resources:
       FunctionName: "CloudWatchAutoAlarms"
       Handler: cw_auto_alarms.lambda_handler
       Runtime: python3.8
-      Role:  !GetAtt CloudWatchAutoAlarmLambdaRole.Arn
+      Role: !GetAtt CloudWatchAutoAlarmLambdaRole.Arn
       MemorySize: !Ref Memory
       Timeout: 600
       Code:
@@ -154,7 +153,7 @@ Resources:
           ALARM_MEMORY_HIGH_THRESHOLD: 75
           ALARM_DISK_PERCENT_LOW_THRESHOLD: 20
           ALARM_IDENTIFIER_PREFIX: !Ref AlarmIdentifierPrefix
-          CLOUDWATCH_APPEND_DIMENSIONS: 'InstanceId, ImageId, InstanceType'
+          CLOUDWATCH_APPEND_DIMENSIONS: "InstanceId, ImageId, InstanceType"
           ALARM_LAMBDA_ERROR_THRESHOLD: 0
           ALARM_LAMBDA_THROTTLE_THRESHOLD: 0
           TARGET_REGIONS: !If
@@ -178,14 +177,12 @@ Resources:
             - !Ref TargetOrganizationalUnits
             - !Ref "AWS::NoValue"
 
-
-
   CloudWatchAutoAlarmLambdaRole:
     Type: AWS::IAM::Role
     Properties:
       RoleName: "CloudWatchAutoAlarmsRole"
       AssumeRolePolicyDocument:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
           - Effect: Allow
             Principal:
@@ -197,7 +194,7 @@ Resources:
       Policies:
         - PolicyName: "Lambda_Permissions"
           PolicyDocument:
-            Version: '2012-10-17'
+            Version: "2012-10-17"
             Statement:
               - Effect: Allow
                 Action:
@@ -232,7 +229,7 @@ Resources:
                   - cloudwatch:DescribeAlarms
                   - cloudwatch:DeleteAlarms
                   - cloudwatch:PutMetricAlarm
-                Resource:  !Sub "arn:${AWS::Partition}:cloudwatch:*:${AWS::AccountId}:alarm:${AlarmIdentifierPrefix}-*"
+                Resource: !Sub "arn:${AWS::Partition}:cloudwatch:*:${AWS::AccountId}:alarm:${AlarmIdentifierPrefix}-*"
               - Effect: Allow
                 Action:
                   - cloudwatch:DescribeAlarms
@@ -249,7 +246,6 @@ Resources:
                   - sts:AssumeRole
                 Resource: !Sub "arn:${AWS::Partition}:iam::${OrganizationManagementAccount}:role/CloudWatchAutoAlarmManagementAccountRole"
 
-
   CloudWatchAutoAlarmsOrgEventBusPolicy:
     Type: AWS::Events::EventBusPolicy
     Condition: AWSOrganizationsDeployment
@@ -263,14 +259,13 @@ Resources:
         Type: "StringEquals"
         Value: !Ref TargetOrganizationId
 
-
   LambdaInvokePermissionCloudwatchEventsEC2:
     Type: AWS::Lambda::Permission
     Properties:
       FunctionName: !GetAtt
         - CloudWatchAutoAlarmsLambdaFunction
         - Arn
-      Action: 'lambda:InvokeFunction'
+      Action: "lambda:InvokeFunction"
       Principal: events.amazonaws.com
       SourceArn: !GetAtt
         - CloudWatchAutoAlarmCloudwatchEventEC2
@@ -282,7 +277,7 @@ Resources:
       FunctionName: !GetAtt
         - CloudWatchAutoAlarmsLambdaFunction
         - Arn
-      Action: 'lambda:InvokeFunction'
+      Action: "lambda:InvokeFunction"
       Principal: events.amazonaws.com
       SourceArn: !GetAtt CloudWatchAutoAlarmCloudwatchEventLambda.Arn
 
@@ -292,7 +287,7 @@ Resources:
       FunctionName: !GetAtt
         - CloudWatchAutoAlarmsLambdaFunction
         - Arn
-      Action: 'lambda:InvokeFunction'
+      Action: "lambda:InvokeFunction"
       Principal: events.amazonaws.com
       SourceArn: !GetAtt
         - CloudWatchAutoAlarmCloudwatchEventRDSCreate
@@ -304,7 +299,7 @@ Resources:
       FunctionName: !GetAtt
         - CloudWatchAutoAlarmsLambdaFunction
         - Arn
-      Action: 'lambda:InvokeFunction'
+      Action: "lambda:InvokeFunction"
       Principal: events.amazonaws.com
       SourceArn: !GetAtt
         - CloudWatchAutoAlarmCloudwatchEventRDSDelete
@@ -326,21 +321,15 @@ Resources:
     Properties:
       Name: Initiate-CloudWatchAutoAlarmsEC2
       Description: Creates CloudWatch alarms on instance start via Lambda CloudWatchAutoAlarms and deletes them on instance termination.
-      EventPattern: '
+      EventPattern: !Sub |
         {
-          "source": [
-            "aws.ec2"
-          ],
-          "detail-type": [
-            "EC2 Instance State-change Notification"
-          ],
+          "source": ["aws.ec2"],
+          "detail-type": ["EC2 Instance State-change Notification"],
           "detail": {
-            "state": [
-              "running",
-              "terminated"
-            ]
+            "state": ["running", "terminated"]
           }
-        }'
+        }
+
       State: !Ref EventState
       Targets:
         - Arn: !GetAtt CloudWatchAutoAlarmsLambdaFunction.Arn
@@ -356,35 +345,28 @@ Resources:
         - Arn: !GetAtt CloudWatchAutoAlarmsLambdaFunction.Arn
           Id: LATEST
           Input: '
-          {
-          "action": "scan"
-          }
-          '
+            {
+            "action": "scan"
+            }
+            '
 
   CloudWatchAutoAlarmCloudwatchEventLambda:
     Type: AWS::Events::Rule
     Properties:
       Name: Initiate-CloudWatchAutoAlarmsLambda
       Description: Creates and deletes CloudWatch alarms for lambda functions with the CloudWatchAutoAlarms activation tag
-      EventPattern: '
-        {
-          "source": [
-            "aws.lambda"
-          ],
-          "detail-type": [
-            "AWS API Call via CloudTrail"
-          ],
-          "detail": {
-            "eventSource": [
-              "lambda.amazonaws.com"
-            ],
-            "eventName": [
-              "TagResource20170331v2",
-              "DeleteFunction20150331"
-            ]
-          }
-        }
-        '
+      EventPattern:
+        source:
+          - "aws.lambda"
+        detail-type:
+          - "AWS API Call via CloudTrail"
+        detail:
+          eventSource:
+            - "lambda.amazonaws.com"
+          eventName:
+            - "TagResource20170331v2"
+            - "DeleteFunction20150331"
+
       State: !Ref EventState
       Targets:
         - Arn: !GetAtt CloudWatchAutoAlarmsLambdaFunction.Arn
@@ -395,15 +377,14 @@ Resources:
     Properties:
       Name: Initiate-CloudWatchAutoAlarmsRDSCreate
       Description: Creates CloudWatch alarms for RDS instances with CloudWatchAutoAlarms activation tag
-      EventPattern: '
-        {
-          "detail-type": ["AWS API Call via CloudTrail"],
-          "detail": {
-            "eventSource": ["rds.amazonaws.com"],
-            "eventName": ["AddTagsToResource"]
-          }
-        }
-        '
+      EventPattern:
+        detail-type:
+          - "AWS API Call via CloudTrail"
+        detail:
+          eventSource:
+            - "rds.amazonaws.com"
+          eventName:
+            - "AddTagsToResource"
       State: !Ref EventState
       Targets:
         - Arn: !GetAtt CloudWatchAutoAlarmsLambdaFunction.Arn
@@ -414,14 +395,13 @@ Resources:
     Properties:
       Name: Initiate-CloudWatchAutoAlarmsRDSDelete
       Description: Deletes CloudWatch alarms for corresponding RDS instance is deleted
-      EventPattern: '
+      EventPattern: !Sub |
         {
           "source": ["aws.rds"],
           "detail": {
             "EventCategories": ["creation", "deletion"]
           }
         }
-        '
       State: !Ref EventState
       Targets:
         - Arn: !GetAtt CloudWatchAutoAlarmsLambdaFunction.Arn

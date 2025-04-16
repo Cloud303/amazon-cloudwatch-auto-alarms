@@ -12,10 +12,10 @@ def lambda_handler(event, context):
 
     create_alarm_tag = getenv("ALARM_TAG", "Create_Auto_Alarms")
 
-    target_org_units = getenv("TARGET_ORG_UNITS", None)
+    target_org_units = getenv("TARGET_ORG_UNITS", "")
     target_org_units = target_org_units.split(",")
 
-    target_regions = getenv("TARGET_REGIONS", None)
+    target_regions = getenv("TARGET_REGIONS", "")
     target_regions = target_regions.split(",")
 
     local_account_id = getenv("LOCAL_ACCOUNT_ID", None)
