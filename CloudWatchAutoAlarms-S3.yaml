@@ -143,6 +143,11 @@ Resources:
                       bucket_name = event['ResourceProperties']['BucketName']
                       bucket = s3.Bucket(bucket_name)
                       bucket.objects.all().delete()
+                      
+                      # Delete all object versions
+                      for version in bucket.object_versions.all():
+                          version.delete()
+
                   send_response(event, context, "SUCCESS", {})
               except Exception as e:
                   print(f"Error: {e}")
