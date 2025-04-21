@@ -122,15 +122,16 @@ def check_alarm_tag(instance_id, tag_key, region, account_id=None):
         # Can only be one instance when called by CloudWatch Events
         if 'Reservations' in instance and len(instance['Reservations']) > 0 and len(
                 instance['Reservations'][0]['Instances']) > 0:
-            ec2_client.create_tags(
-                Resources=[instance_id],
-                Tags=[
-                    {
-                        'Key': tag_key,
-                        'Value': str(datetime.utcnow())
-                    }
-                ]
-            )
+            # If the instance has the tag, return the instance details
+            # ec2_client.create_tags(   
+            #     Resources=[instance_id],
+            #     Tags=[
+            #         {
+            #             'Key': tag_key,
+            #             'Value': str(datetime.utcnow())
+            #         }
+            #     ]
+            # )
             return instance['Reservations'][0]['Instances'][0]
         else:
             return False
