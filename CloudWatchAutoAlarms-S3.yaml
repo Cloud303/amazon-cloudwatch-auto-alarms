@@ -70,6 +70,7 @@ Resources:
                 Action:
                   - "s3:ListBucket"
                   - "s3:DeleteObject"
+                  - "s3:ListBucketVersions"
                   - "s3:DeleteObjectVersion"
                 Resource:
                   - !Sub "arn:aws:s3:::cloudwatch-auto-alarms-${AWS::AccountId}-${AWS::Region}"
@@ -133,7 +134,7 @@ Resources:
                   print(f"Error during bucket cleanup: {e}")
                   send_response(event, context, "FAILED", str(e))
 
-      Runtime: "python3.9"
+      Runtime: "python3.13"
       Timeout: 300
 
   CustomVersionCleanerResource:
