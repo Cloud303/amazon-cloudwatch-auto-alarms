@@ -1,5 +1,6 @@
 import boto3
 import logging
+import os
 from botocore.config import Config
 from os import getenv
 from datetime import datetime
@@ -784,7 +785,7 @@ def process_wildcard_alarm(alarm_object):
 
 
 def get_active_accounts_by_organizational_unit(ou_ids, management_account):
-    region = "us-east-1"
+    region = os.environ['AWS_REGION']
     logger.info("Assuming role in organizations management account: {}".format(management_account))
     assumed_credentials = assume_management_account_role(management_account, region)
     client = boto3_client('organizations', region, assumed_credentials)
