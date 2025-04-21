@@ -13,6 +13,7 @@ Resources:
           - Id: DeleteRule
             Status: Enabled
             ExpirationInDays: "90"
+    DeletionPolicy: Delete
 
   LambdaDeploymentBucketPolicy:
     Type: "AWS::S3::BucketPolicy"
@@ -50,7 +51,7 @@ Resources:
                   - public-read-write
                   - authenticated-read
 
-  EmptyBucketFunctionRole:
+  LambdaVersionCleanerFunctionRole:
     Type: "AWS::IAM::Role"
     Properties:
       AssumeRolePolicyDocument:
@@ -61,7 +62,7 @@ Resources:
               Service: "lambda.amazonaws.com"
             Action: "sts:AssumeRole"
       Policies:
-        - PolicyName: "EmptyBucketPolicy"
+        - PolicyName: "LambdaVersionCleanerPolicy"
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
@@ -69,60 +70,40 @@ Resources:
                 Action:
                   - "s3:ListBucket"
                   - "s3:DeleteObject"
+                  - "s3:DeleteObjectVersion"
                 Resource:
                   - !Sub "arn:aws:s3:::cloudwatch-auto-alarms-${AWS::AccountId}-${AWS::Region}"
                   - !Sub "arn:aws:s3:::cloudwatch-auto-alarms-${AWS::AccountId}-${AWS::Region}/*"
-
-  EmptyBucketFunction:
-    Type: "AWS::Lambda::Function"
-    Properties:
-      Handler: index.handler
-      Role: !GetAtt EmptyBucketFunctionRole.Arn
-      Code:
-        ZipFile: |
-          import boto3
-          import cfnresponse
-
-          s3 = boto3.resource('s3')
-
-          def handler(event, context):
-              if event['RequestType'] == 'Delete':
-                  bucket_name = event['ResourceProperties']['BucketName']
-                  bucket = s3.Bucket(bucket_name)
-                  bucket.objects.all().delete()
-              cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
-
-      Runtime: "python3.9"
-      Timeout: 300
-
-  CustomBucketResource:
-    Type: "AWS::CloudFormation::CustomResource"
-    Properties:
-      ServiceToken: !GetAtt EmptyBucketFunction.Arn
-      BucketName: !Ref LambdaDeploymentBucket
+              - Effect: "Allow"
+                Action:
+                  - "logs:CreateLogGroup"
+                  - "logs:CreateLogStream"
+                  - "logs:PutLogEvents"
+                Resource: "arn:aws:logs:*:*:*"
 
   LambdaVersionCleanerFunction:
     Type: "AWS::Lambda::Function"
     Properties:
       Handler: index.handler
-      Role: !GetAtt EmptyBucketFunctionRole.Arn
+      Role: !GetAtt LambdaVersionCleanerFunctionRole.Arn
       Code:
         ZipFile: |
           import boto3
           import json
           import urllib3
 
+          s3 = boto3.resource('s3')
           http = urllib3.PoolManager()
 
-          def send_response(event, context, status, data):
+          def send_response(event, context, status, reason=None):
               response_body = {
                   'Status': status,
-                  'Reason': f"See the logs in CloudWatch Log Stream: {context.log_stream_name}",
+                  'Reason': reason or f"See the logs in CloudWatch Log Stream: {context.log_stream_name}",
                   'PhysicalResourceId': context.log_stream_name,
                   'StackId': event['StackId'],
                   'RequestId': event['RequestId'],
                   'LogicalResourceId': event['LogicalResourceId'],
-                  'Data': data
+                  'Data': {}
               }
 
               encoded_body = json.dumps(response_body).encode('utf-8')
@@ -133,25 +114,24 @@ Resources:
               except Exception as e:
                   print(f"Failed to send CloudFormation response: {e}")
 
-          # Example for `EmptyBucketFunction`
-          s3 = boto3.resource('s3')
-
           def handler(event, context):
               print(f"Received event: {json.dumps(event)}")
               try:
                   if event['RequestType'] == 'Delete':
                       bucket_name = event['ResourceProperties']['BucketName']
                       bucket = s3.Bucket(bucket_name)
+
+                      # Delete all objects
                       bucket.objects.all().delete()
-                      
+
                       # Delete all object versions
                       for version in bucket.object_versions.all():
                           version.delete()
 
-                  send_response(event, context, "SUCCESS", {})
+                  send_response(event, context, "SUCCESS")
               except Exception as e:
-                  print(f"Error: {e}")
-                  send_response(event, context, "FAILED", {})
+                  print(f"Error during bucket cleanup: {e}")
+                  send_response(event, context, "FAILED", str(e))
 
       Runtime: "python3.9"
       Timeout: 300
@@ -168,4 +148,3 @@ Outputs:
     Description: "Lambda S3 deployment bucket name for deployment support of amazon-cloudwatch-auto-alarms lambda function"
     Export:
       Name: !Sub "amazon-cloudwatch-auto-alarms-bucket-name"
- 
