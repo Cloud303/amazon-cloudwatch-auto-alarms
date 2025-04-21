@@ -1,5 +1,5 @@
 Description: S3 Bucket for Cross-Account deployment of amazon-cloudwatch-auto-alarms Lambda function
-AWSTemplateFormatVersion: '2010-09-09'
+AWSTemplateFormatVersion: "2010-09-09"
 
 Resources:
   LambdaDeploymentBucket:
@@ -12,14 +12,14 @@ Resources:
         Rules:
           - Id: DeleteRule
             Status: Enabled
-            ExpirationInDays: '90'
+            ExpirationInDays: "90"
 
   LambdaDeploymentBucketPolicy:
     Type: "AWS::S3::BucketPolicy"
     Properties:
       Bucket: !Ref LambdaDeploymentBucket
       PolicyDocument:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Id: SSEAndSSLPolicy
         Statement:
           - Sid: DenyInsecureConnections
@@ -28,21 +28,21 @@ Resources:
             Action: s3:*
             Resource:
               - !Join
-                - ''
+                - ""
                 - - Fn::GetAtt: [LambdaDeploymentBucket, Arn]
-                  - '/*'
+                  - "/*"
             Condition:
               Bool:
-                aws:SecureTransport: 'false'
+                aws:SecureTransport: "false"
           - Sid: DenyS3PublicObjectACL
             Effect: Deny
             Principal: "*"
             Action: s3:PutObjectAcl
             Resource:
               - !Join
-                - ''
+                - ""
                 - - Fn::GetAtt: [LambdaDeploymentBucket, Arn]
-                  - '/*'
+                  - "/*"
             Condition:
               StringEqualsIgnoreCaseIfExists:
                 s3:x-amz-acl:
@@ -50,9 +50,117 @@ Resources:
                   - public-read-write
                   - authenticated-read
 
+  EmptyBucketFunctionRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service: "lambda.amazonaws.com"
+            Action: "sts:AssumeRole"
+      Policies:
+        - PolicyName: "EmptyBucketPolicy"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: "Allow"
+                Action:
+                  - "s3:ListBucket"
+                  - "s3:DeleteObject"
+                Resource:
+                  - !Sub "arn:aws:s3:::cloudwatch-auto-alarms-${AWS::AccountId}-${AWS::Region}"
+                  - !Sub "arn:aws:s3:::cloudwatch-auto-alarms-${AWS::AccountId}-${AWS::Region}/*"
+
+  EmptyBucketFunction:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Handler: index.handler
+      Role: !GetAtt EmptyBucketFunctionRole.Arn
+      Code:
+        ZipFile: |
+          import boto3
+          import cfnresponse
+
+          s3 = boto3.resource('s3')
+
+          def handler(event, context):
+              if event['RequestType'] == 'Delete':
+                  bucket_name = event['ResourceProperties']['BucketName']
+                  bucket = s3.Bucket(bucket_name)
+                  bucket.objects.all().delete()
+              cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+
+      Runtime: "python3.9"
+      Timeout: 300
+
+  CustomBucketResource:
+    Type: "AWS::CloudFormation::CustomResource"
+    Properties:
+      ServiceToken: !GetAtt EmptyBucketFunction.Arn
+      BucketName: !Ref LambdaDeploymentBucket
+
+  LambdaVersionCleanerFunction:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Handler: index.handler
+      Role: !GetAtt EmptyBucketFunctionRole.Arn
+      Code:
+        ZipFile: |
+          import boto3
+          import json
+          import urllib3
+
+          http = urllib3.PoolManager()
+
+          def send_response(event, context, status, data):
+              response_body = {
+                  'Status': status,
+                  'Reason': f"See the logs in CloudWatch Log Stream: {context.log_stream_name}",
+                  'PhysicalResourceId': context.log_stream_name,
+                  'StackId': event['StackId'],
+                  'RequestId': event['RequestId'],
+                  'LogicalResourceId': event['LogicalResourceId'],
+                  'Data': data
+              }
+
+              encoded_body = json.dumps(response_body).encode('utf-8')
+              headers = {'content-type': '', 'content-length': str(len(encoded_body))}
+
+              try:
+                  http.request('PUT', event['ResponseURL'], body=encoded_body, headers=headers)
+              except Exception as e:
+                  print(f"Failed to send CloudFormation response: {e}")
+
+          # Example for `EmptyBucketFunction`
+          s3 = boto3.resource('s3')
+
+          def handler(event, context):
+              print(f"Received event: {json.dumps(event)}")
+              try:
+                  if event['RequestType'] == 'Delete':
+                      bucket_name = event['ResourceProperties']['BucketName']
+                      bucket = s3.Bucket(bucket_name)
+                      bucket.objects.all().delete()
+                  send_response(event, context, "SUCCESS", {})
+              except Exception as e:
+                  print(f"Error: {e}")
+                  send_response(event, context, "FAILED", {})
+
+      Runtime: "python3.9"
+      Timeout: 300
+
+  CustomVersionCleanerResource:
+    Type: "AWS::CloudFormation::CustomResource"
+    Properties:
+      ServiceToken: !GetAtt LambdaVersionCleanerFunction.Arn
+      BucketName: !Ref LambdaDeploymentBucket
+
 Outputs:
   LambdaDeploymentBucketName:
     Value: !Ref LambdaDeploymentBucket
     Description: "Lambda S3 deployment bucket name for deployment support of amazon-cloudwatch-auto-alarms lambda function"
     Export:
       Name: !Sub "amazon-cloudwatch-auto-alarms-bucket-name"
+ 
