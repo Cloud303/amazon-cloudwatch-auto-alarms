@@ -3,6 +3,7 @@ import logging
 import os
 from botocore.config import Config
 from os import getenv
+from copy import deepcopy
 from datetime import datetime
 
 logger = logging.getLogger()
@@ -410,6 +411,7 @@ def process_alarm_tags(instance_id, instance_info, default_alarms, wildcard_alar
                        sns_topic_arn, cw_namespace, create_default_alarms_flag, alarm_separator, alarm_identifier,
                        region, account_id=None):
     tags = instance_info['Tags']
+    local_default_alarms = deepcopy(default_alarms)
 
     ImageId = instance_info['ImageId']
     logger.debug('ImageId is: {}'.format(ImageId))
@@ -434,11 +436,11 @@ def process_alarm_tags(instance_id, instance_info, default_alarms, wildcard_alar
                                   alarm_separator, alarm_identifier, region, account_id)
 
     if create_default_alarms_flag == 'true':
-        for alarm_tag in default_alarms['AWS/EC2']:
+        for alarm_tag in local_default_alarms['AWS/EC2']:
             create_alarm_from_tag(instance_id, alarm_tag, instance_info, metric_dimensions_map, sns_topic_arn,
                                   alarm_separator, alarm_identifier, region, account_id)
         if platform:
-            for alarm_tag in default_alarms[cw_namespace][platform]:
+            for alarm_tag in local_default_alarms[cw_namespace][platform]:
                 create_alarm_from_tag(instance_id, alarm_tag, instance_info, metric_dimensions_map, sns_topic_arn,
                                       alarm_separator, alarm_identifier, region, account_id)
             if wildcard_alarms and cw_namespace in wildcard_alarms and platform in wildcard_alarms[cw_namespace]:
