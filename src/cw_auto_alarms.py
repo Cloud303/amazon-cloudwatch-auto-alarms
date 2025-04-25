@@ -53,6 +53,8 @@ def lambda_handler(event, context):
         cw_namespace: append_dimensions,
         'AWS/EC2': ['InstanceId']
     }
+    if 'AutoScalingGroupName' not in metric_dimensions_map[cw_namespace]:
+        metric_dimensions_map[cw_namespace].append('AutoScalingGroupName')
 
     # For Redhat, the default device is xvda2, xfs, for Ubuntu, the default fstype is ext4,
     # for Amazon Linux, the default device is xvda1, xfs

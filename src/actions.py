@@ -349,9 +349,8 @@ def determine_dimensions(AlarmName, alarm_separator, alarm_tag, instance_info, m
             instance_asg = next(
                 (tag['Value'] for tag in instance_info['Tags'] if tag['Key'] == 'aws:autoscaling:groupName'), None)
             if instance_asg:
-                dimension_value = instance_asg
                 dimension['Name'] = dimension_name
-                dimension['Value'] = dimension_value
+                dimension['Value'] = instance_asg
                 dimensions.append(dimension)
         else:
             # If the dimension exists as a property of the EC2 instance being processed, get the dimension value from
